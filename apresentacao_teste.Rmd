@@ -1,0 +1,235 @@
+---
+title: "Avalia UnB"
+subtitle: "Unidade X"  
+author: "Diretoria de Avaliação e Informações Gerenciais"
+date: "Julho de 2020<br>(atualizado em: `r format(Sys.Date(), '%d/%m/%Y')`)"
+output:
+  xaringan::moon_reader:
+    lib_dir: libs
+    # css: xaringan-themer.css
+    nature:
+      highlightStyle: github
+      highlightLines: true
+      countIncrementalSlides: true
+---
+
+```{r setup, include=FALSE}
+options(htmltools.dir.version = FALSE, OutDec = ",", scipen = 9)
+knitr::opts_chunk$set(fig.retina = 4, dev = "svg", fig.align = "center",
+                      echo = FALSE, error = FALSE, warning = FALSE, message = FALSE)
+
+library(patchwork)
+library(showtext)
+library(knitr)
+library(kableExtra)
+library(tidyverse)
+
+font_add("fira", "C:/Users/GUILHERME/AppData/Local/Microsoft/Windows/Fonts/FiraSans-Regular.ttf")
+showtext_auto()
+
+unid <- "FEF"
+
+rais2018_grad <- readRDS("rais2018_grad.RDS") %>% filter(unidade == unid)
+rais2018_pos <- readRDS("rais2018_pos.RDS") %>% filter(unidade == unid)
+load("Completo14042020.RData")
+grad <- Completo %>% filter(Nivel == "Graduacao", Unidade == unid)
+pos <- Completo %>% filter(Nivel != "Graduacao", Unidade == unid)
+
+TabelaPerfil <- function(base, variavel, ano = 2019, nome = unid){
+
+    tab <- base %>%
+      mutate(dummy = 1) %>% 
+      filter(`Ano Ingresso Opcao` <= ano, `Ano Saida Opcao` >= ano) %>% 
+      group_by({{variavel}}) %>% 
+      distinct(RA, .keep_all = T) %>% 
+      summarise(Ingressantes = sum(dummy[`Ano Ingresso` == ano]),
+                Matriculados = sum(dummy[h20190 == 1 | h20191 == 1 | h20192 == 1]),
+                Formados = sum(dummy[str_detect(`For. Saida Opcao`, "Formatura") & `Ano Saida Opcao` == ano])) %>% 
+      janitor::adorn_totals("row", name = glue::glue("Total {nome}")) %>% 
+      ungroup()
+    
+    return(tab[rowSums(tab[-1])>0,])
+
+}
+
+TabelaPerfilPos <- function(base, variavel, ano = 2019, nome = unid){
+
+    tab <- base %>%
+      mutate(dummy = 1) %>% 
+      filter(`Ano Ingresso Opcao` <= ano, `Ano Saida Opcao` >= ano) %>% 
+      group_by({{variavel}}) %>% 
+      distinct(RA, .keep_all = T) %>% 
+      summarise(Ingressantes = sum(dummy[`Ano Ingresso` == ano]),
+                Matriculados = sum(dummy[is.na(TGM20191) | is.na(TGM20192)]),
+                Formados = sum(dummy[str_detect(`For. Saida Opcao`, "Formatura") & `Ano Saida Opcao` == ano])) %>% 
+      janitor::adorn_totals("row", name = glue::glue("Total {nome}")) %>% 
+      ungroup()
+    
+    return(tab[rowSums(tab[-1])>0,])
+
+}
+
+```
+
+# ESTUDOS DESENVOLVIDOS
+
+- Perfil dos Estudantes
+
+- Indicadores de Fluxo da Educação Superior
+
+- Pesquisa de Egressos
+
+
+---
+# PERFIL DOS ESTUDANTES
+
+- Retrato do ano de 2019
+  - Ingressantes;
+  - Matriculados;
+  - Formados.
+  
+- Variáveis analisadas: sexo, faixa etária, raça/cor autodeclarada, cota de ingresso, forma de ingresso e forma de saída
+
+- Fonte das informações: SIGRA em 14/04/2020
+
+- Disponível em: [avaliacao.unb.br](www.avaliacao.unb.br) → Avaliação Interna → Perfil dos Estudantes
+
+---
+## PERFIL GERAL - CURSOS DE GRADUAÇÃO
+
+```{r}
+tab_geral <- TabelaPerfil(grad, `Nome Anuário`) %>% 
+  bind_rows(TabelaPerfil(Completo %>% filter(Nivel == "Graduacao"), `Nome Anuário`, nome = "UnB") %>% 
+              slice(nrow(TabelaPerfil(Completo %>% filter(Nivel == "Graduacao"), `Nome Anuário`))))
+
+tab_geral %>% 
+  kable(format.args = list(big.mark = "."))
+```
+---
+## NÚMEROS DA GRADUAÇÃO - UnB & `r unid`
+
+```{r graf1, fig.showtext=TRUE, out.width='100%', fig.height=4, fig.width=10}
+dados_graf1 <- tab_geral %>% 
+  slice(nrow(tab_geral)-1,nrow(tab_geral)) %>% 
+  pivot_longer(-`Nome Anuário`) %>% 
+  group_by(name) %>% 
+  mutate(fraction = value / sum(value),
+         ymax = cumsum(fraction),
+         ymin = c(0, head(ymax, n = -1)),
+         labelposition = (ymax + ymin) / 2) %>% 
+  ungroup()
+
+# colors
+# pantone baby blue: #B5C7D3
+# pantone classic blue: #0F4C81
+
+dados_graf1 %>% 
+  ggplot(aes(ymax=ymax, ymin=ymin, xmax=4, xmin=3, fill=`Nome Anuário`)) +
+  geom_rect() +
+  geom_text(data = dados_graf1 %>% filter(str_detect(`Nome Anuário`, "UnB")), family = "fira", size=12, x=1, 
+            aes(y=labelposition, label=glue::glue("{format(value, big.mark = '.')}"))) +
+  geom_text(data = dados_graf1 %>% filter(str_detect(`Nome Anuário`, "UnB")), family = "fira", size=8, x=5, 
+            aes(y=labelposition, label=glue::glue("{str_to_upper(name)}"))) +
+  geom_text(data = dados_graf1 %>% filter(!str_detect(`Nome Anuário`, "UnB")), family = "fira", size=6, x=4.5,
+            aes(y=labelposition, label=paste0(round(100*fraction, 1), "%"))) +
+  scale_fill_manual(values = c("#B5C7D3", "#0F4C81")) +
+  coord_polar(theta="y") +
+  xlim(c(1, 4.5)) +
+  facet_wrap(~name) +
+  theme_void() +
+  theme(legend.position = "none",
+        strip.text.x = element_blank())
+
+```
+---
+## PERFIL GERAL - CURSOS DE PÓS-GRADUAÇÃO
+
+```{r}
+tab_geral_pos <- TabelaPerfilPos(pos, `Nome Curso`) %>% 
+  bind_rows(TabelaPerfilPos(Completo %>% filter(Nivel != "Graduacao"), `Nome Curso`, nome = "UnB") %>% 
+              slice(nrow(TabelaPerfilPos(Completo %>% filter(Nivel != "Graduacao"), `Nome Curso`))))
+
+tab_geral_pos %>% 
+  kable(format.args = list(big.mark = "."))
+```
+---
+## NÚMEROS DA PÓS-GRADUAÇÃO - UnB & `r unid`
+
+```{r graf2, fig.showtext=TRUE, out.width='100%', fig.height=4, fig.width=10}
+dados_graf2 <- tab_geral_pos %>% 
+  slice(nrow(tab_geral_pos)-1,nrow(tab_geral_pos)) %>% 
+  pivot_longer(-`Nome Curso`) %>% 
+  group_by(name) %>% 
+  mutate(fraction = value / sum(value),
+         ymax = cumsum(fraction),
+         ymin = c(0, head(ymax, n = -1)),
+         labelposition = (ymax + ymin) / 2) %>% 
+  ungroup()
+
+# colors
+# pantone 2427C: #025F1D
+# pantone 557C: #85B09A
+
+dados_graf2 %>% 
+  ggplot(aes(ymax=ymax, ymin=ymin, xmax=4, xmin=3, fill=`Nome Curso`)) +
+  geom_rect() +
+  geom_text(data = dados_graf2 %>% filter(str_detect(`Nome Curso`, "UnB")), family = "fira", size=12, x=1, 
+            aes(y=labelposition, label=glue::glue("{format(value, big.mark = '.')}"))) +
+  geom_text(data = dados_graf2 %>% filter(str_detect(`Nome Curso`, "UnB")), family = "fira", size=8, x=5, 
+            aes(y=labelposition, label=glue::glue("{str_to_upper(name)}"))) +
+  geom_text(data = dados_graf2 %>% filter(!str_detect(`Nome Curso`, "UnB")), family = "fira", size=6, x=4.5,
+            aes(y=labelposition, label=paste0(round(100*fraction, 1), "%"))) +
+  scale_fill_manual(values = c("#85B09A", "#025F1D")) +
+  coord_polar(theta="y") +
+  xlim(c(1, 4.5)) +
+  facet_wrap(~name) +
+  theme_void() +
+  theme(legend.position = "none",
+        strip.text.x = element_blank())
+
+```
+---
+## MATRICULADOS DOS CURSOS POR SEXO
+
+```{r}
+
+mat_grad <- grad %>% 
+  filter(`Ano Ingresso Opcao` <= 2019, `Ano Saida Opcao` >= 2019, (h20190 == 1 | h20191 == 1 | h20192 == 1)) %>% 
+  count(Curso = `Nome Anuário`, Sexo) %>% 
+  pivot_wider(names_from = Sexo, values_from = n, values_fill = list(n = 0)) %>% 
+  janitor::adorn_totals(name = "FE Graduação") %>% 
+  bind_rows(Completo %>% 
+              filter(Nivel == "Graduacao", 
+                     `Ano Ingresso Opcao` <= 2019, `Ano Saida Opcao` >= 2019, (h20190 == 1 | h20191 == 1 | h20192 == 1)) %>% 
+              count(Sexo) %>% 
+              pivot_wider(names_from = Sexo, values_from = n, values_fill = list(n = 0))) %>% 
+  mutate(Curso = ifelse(is.na(Curso),
+                        "UnB Graduação",
+                        Curso))
+
+mat_pos <- pos %>% 
+  filter(`Ano Ingresso Opcao` <= 2019, `Ano Saida Opcao` >= 2019, (is.na(TGM20191) | is.na(TGM20192))) %>% 
+  count(Curso = `Nome Curso`, Sexo) %>% 
+  pivot_wider(names_from = Sexo, values_from = n, values_fill = list(n = 0)) %>% 
+  janitor::adorn_totals(name = "FE Pós-Graduação") %>% 
+  bind_rows(Completo %>% 
+              filter(Nivel != "Graduacao", 
+                     `Ano Ingresso Opcao` <= 2019, `Ano Saida Opcao` >= 2019, (is.na(TGM20191) | is.na(TGM20192))) %>% 
+              count(Sexo) %>% 
+              pivot_wider(names_from = Sexo, values_from = n, values_fill = list(n = 0))) %>% 
+  mutate(Curso = ifelse(is.na(Curso),
+                        "UnB Pós-Graduação",
+                        Curso))
+
+dados_graf3 <- mat_grad %>% 
+  bind_rows(mat_pos) %>% 
+  # mutate(Curso = paste(row_number(), Curso)) %>%
+  pivot_longer(-Curso)
+
+dados_graf3 %>% 
+  ggplot(aes(x = reorder(factor(Curso), desc(Curso)), y = value, fill = name)) +
+  geom_col(position = "fill") + 
+  coord_flip()
+
+```
+
