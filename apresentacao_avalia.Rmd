@@ -29,7 +29,6 @@ knitr::opts_chunk$set(
 
   )
 
-library(patchwork)
 library(showtext)
 library(knitr)
 library(kableExtra)
@@ -40,21 +39,6 @@ library(glue)
 
 font_add("fira", "C:/Users/GUILHERME/AppData/Local/Microsoft/Windows/Fonts/FiraSans-Regular.ttf")
 showtext_auto()
-
-unid <- "FAC"
-
-rais2018_grad <- readRDS("rais2018_grad.RDS") %>% filter(unidade == unid)
-rais2018_pos <- readRDS("rais2018_pos.RDS") %>% filter(unidade == unid)
-load("Completo14042020.RData")
-
-Completo <- Completo %>% filter(Modalidade != "Educação a Distância" | is.na(Modalidade))
-grad <- Completo %>% filter(Nivel == "Graduacao", Unidade == unid)
-pos <- Completo %>% filter(Nivel != "Graduacao", Unidade == unid)
-
-eg_grad <- readRDS("representatividade_eg_grad.RDS") %>% filter(unidade == unid)
-eg_pos <- readRDS("representatividade_eg_pos.RDS") %>% filter(unidade == unid)
-
-evasao <- rio::import("base_evasao_curso_2011_2018.xlsx") %>% filter(Unidade == unid)
 
 TabelaPerfil <- function(base, variavel, ano = 2019, nome = unid) {
   tab <- base %>%
